@@ -112,7 +112,11 @@ approach them:
 - **The bars glyph** switches between the column layout and the horizontal row
   layout. It shows the layout you'll get, not the one you're in.
 - **The circle** is focus mode. Everything but the date, month, weather and
-  the mini calendar fades out over five seconds. Click again to bring it back.
+  the mini calendar fades out over three seconds. Click again to bring it back.
+
+Switching layout takes the same three seconds — CSS grid can't tween its own
+tracks, so the frame crosses through black: a second and a half out, re-laid
+while nothing is on screen, a second and a half back.
 
 Both choices are remembered.
 
