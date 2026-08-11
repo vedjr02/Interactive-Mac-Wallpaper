@@ -231,3 +231,97 @@ async function mutate(method, path, body) {
     });
   } catch { /* keep the optimistic UI; the next pull reconciles */ }
 }
+
+/* ------------------------------------------------------------------
+   tasks
+------------------------------------------------------------------- */
+function dueLabel(iso) {
+  if (!iso) return null;
+  const [y, m, d] = iso.split('-').map(Number);
+  const due = new Date(y, m - 1, d);
+  const n = daysBetween(new Date(), due);
+  if (n < 0) return { text: `${-n}d late`, cls: 'late' };
+  if (n === 0) return { text: 'today', cls: 'today' };
+  if (n === 1) return { text: 'tomorrow', cls: '' };
+  if (n < 7) return { text: due.toLocaleDateString('en-GB', { weekday: 'short' }), cls: '' };
+  return { text: due.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }), cls: '' };
+}
+
+/* "call mum @fri" → { title:'call mum', due:'2026-08-14' } */
+function parseDue(raw) {
+  const m = raw.match(/\s@(\S+(?:\s\d{1,2})?)\s*$/i);
+  if (!m) return { title: raw.trim(), due: null };
+  const token = m[1].toLowerCase().trim();
+  const title = raw.slice(0, m.index).trim();
+  const today = startOfDay(new Date());
+  let due = null;
+
+  if (/^today$/.test(token)) due = today;
+  else if (/^(tom|tmr|tomorrow)$/.test(token)) due = addDays(today, 1);
+  else if (/^\d+d$/.test(token)) due = addDays(today, parseInt(token));
+  else if (/^\d{4}-\d{2}-\d{2}$/.test(token)) {
+    const [y, mo, d] = token.split('-').map(Number);
+    due = new Date(y, mo - 1, d);
+  } else {
+    const dowIdx = DOW.findIndex((d) => d.toLowerCase() === token.slice(0, 3));
+    if (dowIdx >= 0) {
+      const cur = (today.getDay() + 6) % 7;
+      due = addDays(today, ((dowIdx - cur + 7) % 7) || 7);
+    } else {
+      const dm = token.match(/^(\d{1,2})\s*([a-z]{3,})$/) || token.match(/^([a-z]{3,})\s*(\d{1,2})$/);
+      if (dm) {
+        const num = parseInt(/^\d/.test(dm[1]) ? dm[1] : dm[2]);
+        const mon = /^\d/.test(dm[1]) ? dm[2] : dm[1];
+        const mi = MONTHS.findIndex((x) => x.name.toLowerCase().startsWith(mon.slice(0, 3)));
+        if (mi >= 0 && num >= 1 && num <= 31) {
+          due = new Date(today.getFullYear(), mi, num);
+          if (due < today) due = new Date(today.getFullYear() + 1, mi, num);
+        }
+      }
+    }
+  }
+  return due ? { title, due: key(due) } : { title: raw.trim(), due: null };
+}
+
+function visibleTasks() {
+  const today = key(new Date());
+  return state.tasks.filter((t) => !t.done || (t.completedOn || '') === today);
+}
+
+function renderTasks() {
+  if (state.editing) return;
+  const list = visibleTasks();
+  const open = list.filter((t) => !t.done).length;
+  $('taskCount').textContent = open ? String(open) : '';
+
+  const groups = [
+    ['In progress', list.filter((t) => t.status === 'progress')],
+    ['Not started', list.filter((t) => t.status !== 'progress')],
+  ];
+
+  $('taskBody').innerHTML = groups
+    .filter(([, items]) => items.length)
+    .map(([label, items]) => `
+      <div class="tasksection">
+        <span class="sectionlabel">${label}</span>
+        ${items.map(taskRow).join('')}
+      </div>`)
+    .join('') || '<div class="empty">Nothing on the list</div>';
+
+  updateClips();
+}
+
+function taskRow(t) {
+  const d = dueLabel(t.due);
+  return `
+    <div class="task${t.done ? ' done' : ''}" data-id="${esc(t.id)}">
+      <div class="box" data-act="toggle"></div>
+      <div class="ttitle" data-act="edit">${esc(t.title)}</div>
+      <div class="trail">
+        <span class="act" data-act="status" title="Move">${t.status === 'progress' ? '&larr;' : '&rarr;'}</span>
+        ${d ? `<span class="tdue ${d.cls}">${d.text}</span>` : ''}
+        <span class="act" data-act="delete" title="Delete">&times;</span>
+      </div>
+    </div>`;
+}
+
