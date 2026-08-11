@@ -435,7 +435,20 @@ body {
 /* ==================================================================
    Right rail
    ================================================================== */
-.rail-right { text-align: left; padding-top: 2.1rem; }   /* clears the controls */
+/* No hairline is ever allowed to run through the date. The rail's rules stop
+   short of it instead — --cut is measured in placeNumeral. In the column
+   layout they stop above it, in the row layout they stop to its left. */
+.rail-right {
+  text-align: left;
+  padding-top: 2.1rem;                                   /* clears the controls */
+  --cut: 100%;
+  -webkit-mask-image: linear-gradient(to bottom, #000 var(--cut), transparent var(--cut));
+          mask-image: linear-gradient(to bottom, #000 var(--cut), transparent var(--cut));
+}
+body.layout-rows .rail-right {
+  -webkit-mask-image: linear-gradient(to right, #000 var(--cut), transparent var(--cut));
+          mask-image: linear-gradient(to right, #000 var(--cut), transparent var(--cut));
+}
 /* the month sits high so the bottom-right corner belongs to the date */
 .rail-mid { margin-top: 5.5rem; margin-bottom: auto; }
 

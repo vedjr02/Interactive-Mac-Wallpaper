@@ -85,6 +85,7 @@ function placeNumeral() {
   /* measure everything at its natural size before reserving anything */
   right.style.paddingRight = '';
   next.style.paddingBottom = '';
+  right.style.setProperty('--cut', '100%');
 
   const grid = $('grid').getBoundingClientRect();
   const b = bay.getBoundingClientRect();
@@ -107,7 +108,8 @@ function placeNumeral() {
     const contentRight = Math.max(b.left, ...[...right.children]
       .filter((el) => el.offsetParent)
       .map((el) => el.getBoundingClientRect().right));
-    size = Math.min(b.height * 1.3, (b.right - 14 - contentRight - 26) / unitW);
+    /* stays inside the band so it never reaches the row above */
+    size = Math.min(b.height * 1.0, (b.right - 14 - contentRight - 26) / unitW);
     leftOf = (w) => b.right - 14 - w;
     bottomPx = innerHeight - b.bottom + size * 0.04;
   } else {
@@ -130,12 +132,24 @@ function placeNumeral() {
   n.style.visibility = '';
   n.style.fontSize = size + 'px';
 
-  const r = n.getBoundingClientRect();
-  n.style.left = leftOf(r.width) + 'px';
+  n.style.left = leftOf(n.getBoundingClientRect().width) + 'px';
   n.style.bottom = bottomPx + 'px';
 
+  /* everything below reads the figure where it now actually sits, not
+     where it sat on the previous pass */
+  const f = n.getBoundingClientRect();
+
   /* hold the upcoming column clear of it */
-  if (!rows) next.style.paddingBottom = Math.max(0, grid.bottom - r.top + 22) + 'px';
+  if (!rows) next.style.paddingBottom = Math.max(0, grid.bottom - f.top + 22) + 'px';
+
+  /* and stop the rail's hairlines short of it, rather than letting them
+     run straight through the figure */
+  const rr = right.getBoundingClientRect();
+  const GAP = 20;
+  right.style.setProperty('--cut', Math.max(0, rows
+    ? f.left - GAP - rr.left            /* rules stop to its left  */
+    : f.top - GAP - rr.top,             /* rules stop above it     */
+  ) + 'px');
 }
 
 /* fade the foot of a column only when something is actually cut off */
