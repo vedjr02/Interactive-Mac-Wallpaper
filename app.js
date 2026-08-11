@@ -85,6 +85,7 @@ function placeNumeral() {
   /* measure everything at its natural size before reserving anything */
   right.style.paddingRight = '';
   next.style.paddingBottom = '';
+  next.style.paddingRight = '';
   right.style.setProperty('--cut', '100%');
 
   const grid = $('grid').getBoundingClientRect();
@@ -104,14 +105,20 @@ function placeNumeral() {
   let size, leftOf, bottomPx;
 
   if (rows) {
-    /* the foot band: take what the rail's own blocks leave over */
+    /* The foot band alone is far shorter than the column layout's corner, so
+       the figure is allowed to rise into the band directly above it — up to
+       that band's own rule, never past it. Same weight either way. */
     const contentRight = Math.max(b.left, ...[...right.children]
       .filter((el) => el.offsetParent)
       .map((el) => el.getBoundingClientRect().right));
-    /* stays inside the band so it never reaches the row above */
-    size = Math.min(b.height * 1.0, (b.right - 14 - contentRight - 26) / unitW);
-    leftOf = (w) => b.right - 14 - w;
-    bottomPx = innerHeight - b.bottom + size * 0.04;
+    const BLEED = 52;
+    const FILL = 0.85;
+    size = FILL * Math.min(
+      (grid.bottom + BLEED - (next.getBoundingClientRect().top + 24)) / unitH,
+      (b.right - 14 - contentRight - 26) / unitW,
+    );
+    leftOf = (w) => grid.right - 6 - w;
+    bottomPx = innerHeight - grid.bottom - BLEED;
   } else {
     /* the corner: from the upcoming bay out to the frame edge, and from
        under the rail down past the grid, so it reads as cropped by the
@@ -139,8 +146,9 @@ function placeNumeral() {
      where it sat on the previous pass */
   const f = n.getBoundingClientRect();
 
-  /* hold the upcoming column clear of it */
-  if (!rows) next.style.paddingBottom = Math.max(0, grid.bottom - f.top + 22) + 'px';
+  /* hold the upcoming column clear of it — below in columns, beside in rows */
+  if (rows) next.style.paddingRight = Math.max(0, grid.right - f.left + 24) + 'px';
+  else      next.style.paddingBottom = Math.max(0, grid.bottom - f.top + 22) + 'px';
 
   /* and stop the rail's hairlines short of it, rather than letting them
      run straight through the figure */
