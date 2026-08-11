@@ -460,9 +460,58 @@ function calendarScript(only) {
         });
       } catch (err) {}
     }
+
+    /* A repeating event is stored once, and its start date is the FIRST
+       occurrence — a birthday added in 2019 reports 2019 — so the window
+       filter above can never see it. Collect them by their rule instead
+       and expand the occurrences in Node. */
+    var rec;
+    try {
+      rec = cals[i].events.whose({ recurrence: { _contains: 'FREQ' } })();
+    } catch (err) { continue; }
+
+    for (var k = 0; k < rec.length; k++) {
+      try {
+        out.push({
+          id: name + '-r' + k,
+          title: rec[k].summary() || '(no title)',
+          location: rec[k].location() || '',
+          allDay: !!rec[k].alldayEvent(),
+          start: rec[k].startDate().toISOString(),
+          end: rec[k].endDate().toISOString(),
+          rrule: rec[k].recurrence(),
+          calendar: name
+        });
+      } catch (err) {}
+    }
   }
   JSON.stringify(out);
 `;
+}
+
+/* Turn the repeating events Calendar.app handed back into real occurrences,
+   reusing the same rule expander the iCalendar feeds go through. */
+function expandAppEvents(raw, from, to) {
+  const out = [];
+  for (const e of raw) {
+    if (!e.rrule) { out.push(e); continue; }
+
+    const start = new Date(e.start);
+    const dur = Math.max(0, new Date(e.end) - start);
+
+    for (const occ of expand({ start, rrule: e.rrule, exdates: [] }, from, to)) {
+      out.push({
+        id: `${e.id}-${occ.getTime()}`,
+        title: e.title,
+        location: e.location,
+        allDay: e.allDay,
+        start: occ.toISOString(),
+        end: new Date(occ.getTime() + dur).toISOString(),
+        calendar: e.calendar,
+      });
+    }
+  }
+  return out;
 }
 
 /* ------------------------------------------------------------------
@@ -518,9 +567,12 @@ async function refreshCalendarApp() {
   appBusy = true;
   const t0 = Date.now();
   try {
-    const raw = await runOsascript(calendarScript(config.calendars));
-    commit(JSON.parse(raw.trim() || '[]'), 'calendar.app');
-    log(`Calendar.app: ${calCache.events.length} events in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
+    const [from, to] = windowBounds();
+    const raw = JSON.parse((await runOsascript(calendarScript(config.calendars))).trim() || '[]');
+    const repeats = raw.filter((e) => e.rrule).length;
+    commit(expandAppEvents(raw, from, to), 'calendar.app');
+    log(`Calendar.app: ${calCache.events.length} events in ${((Date.now() - t0) / 1000).toFixed(0)}s`
+      + ` (from ${repeats} repeating)`);
   } catch (e) {
     log('Calendar.app unavailable:', e.message.split('\n')[0].slice(0, 120));
   } finally {
