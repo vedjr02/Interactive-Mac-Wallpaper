@@ -1,0 +1,11 @@
+# written by the bridge on first run
+config.json
+tasks.json
+
+# logs
+*.log
+
+# editor / tooling
+.claude/
+.DS_Store
+node_modules/
