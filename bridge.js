@@ -540,3 +540,128 @@ function startCalendarLoop() {
     setInterval(refreshCalendarApp, 15 * 60 * 1000);
   }
 }
+
+/* ==================================================================
+   http
+   ================================================================== */
+const TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.woff2': 'font/woff2',
+};
+
+function json(res, code, body) {
+  const s = JSON.stringify(body);
+  res.writeHead(code, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Content-Length': Buffer.byteLength(s),
+  });
+  res.end(s);
+}
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let b = '';
+    req.on('data', (c) => {
+      b += c;
+      if (b.length > 1e6) { reject(new Error('too large')); req.destroy(); }
+    });
+    req.on('end', () => { try { resolve(b ? JSON.parse(b) : {}); } catch (e) { reject(e); } });
+    req.on('error', reject);
+  });
+}
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, 'http://localhost');
+  const p = decodeURIComponent(url.pathname);
+
+  if (req.method === 'OPTIONS') return json(res, 204, {});
+
+  /* --- api ------------------------------------------------------- */
+  if (p === '/api/state') {
+    return json(res, 200, {
+      weather: await getWeather(),
+      events: getEvents(),
+      tasks,
+      place: config.place,
+    });
+  }
+
+  if (p === '/api/tasks' && req.method === 'POST') {
+    try {
+      const t = await readBody(req);
+      if (!t.title) return json(res, 400, { error: 'title required' });
+      tasks.push({
+        id: t.id || 't' + Date.now().toString(36),
+        title: String(t.title).slice(0, 400),
+        due: t.due || null,
+        done: false,
+        status: t.status === 'progress' ? 'progress' : 'todo',
+        createdAt: new Date().toISOString(),
+      });
+      await saveTasks();
+      return json(res, 200, { ok: true });
+    } catch (e) { return json(res, 400, { error: e.message }); }
+  }
+
+  const taskMatch = p.match(/^\/api\/tasks\/([\w-]+)$/);
+  if (taskMatch) {
+    const id = taskMatch[1];
+    const i = tasks.findIndex((t) => t.id === id);
+
+    if (req.method === 'DELETE') {
+      if (i >= 0) { tasks.splice(i, 1); await saveTasks(); }
+      return json(res, 200, { ok: true });
+    }
+    if (req.method === 'PATCH') {
+      if (i < 0) return json(res, 404, { error: 'no such task' });
+      try {
+        const b = await readBody(req);
+        for (const f of ['title', 'due', 'done', 'status', 'completedOn']) {
+          if (f in b) tasks[i][f] = f === 'title' ? String(b[f]).slice(0, 400) : b[f];
+        }
+        await saveTasks();
+        return json(res, 200, { ok: true });
+      } catch (e) { return json(res, 400, { error: e.message }); }
+    }
+  }
+
+  if (p.startsWith('/api/')) return json(res, 404, { error: 'not found' });
+
+  /* --- static ---------------------------------------------------- */
+  const rel = p === '/' ? 'index.html' : p.replace(/^\/+/, '');
+  const file = path.join(ROOT, rel);
+  if (!file.startsWith(ROOT) || rel === 'tasks.json' || rel === 'config.json') {
+    res.writeHead(403).end('forbidden');
+    return;
+  }
+
+  fs.readFile(file, (err, data) => {
+    if (err) { res.writeHead(404).end('not found'); return; }
+    res.writeHead(200, {
+      'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream',
+      'Cache-Control': 'no-cache',
+    });
+    res.end(data);
+  });
+});
+
+/* ================================================================== */
+(async function start() {
+  await loadConfig();
+  await loadTasks();
+  server.listen(PORT, '127.0.0.1', () => {
+    log(`wallpape → http://localhost:${PORT}`);
+    log(`${tasks.length} task${tasks.length === 1 ? '' : 's'} loaded`);
+  });
+  getWeather();
+  startCalendarLoop();
+})();
