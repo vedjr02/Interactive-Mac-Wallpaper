@@ -470,3 +470,55 @@ body {
   margin-top: 0.4rem;
   letter-spacing: 0.005em;
 }
+
+/* ==================================================================
+   Controls — the only two visible affordances
+   ================================================================== */
+#controls {
+  position: fixed;
+  z-index: 6;
+  top: var(--inset-top);
+  right: calc(var(--inset-x) + 0.55rem);
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.ctl {
+  width: 0.92rem;
+  height: 0.92rem;
+  opacity: 0.17;
+  transition: opacity 0.2s ease;
+}
+#controls:hover .ctl { opacity: 0.34; }
+.ctl:hover { opacity: 0.85 !important; }
+.ctl svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.ctl path, .ctl .ring {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.ctl .dot { fill: var(--ink); stroke: none; opacity: 0; transition: opacity 0.3s ease; }
+body.focus .ctl .dot { opacity: 1; }
+
+/* the layout glyph shows where you are going, not where you are */
+.g-cols { display: none; }
+body.layout-rows .g-cols { display: inline; }
+body.layout-rows .g-rows { display: none; }
+
+/* ==================================================================
+   Focus — everything but the date, the month and the weather
+   ================================================================== */
+body.ready .col-tasks,
+body.ready .col-today,
+body.ready .col-next,
+body.ready #clock {
+  transition: opacity 5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+body.focus .col-tasks,
+body.focus .col-today,
+body.focus .col-next,
+body.focus #clock {
+  opacity: 0;
+  pointer-events: none;
+}
