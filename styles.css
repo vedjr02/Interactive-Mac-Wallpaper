@@ -53,3 +53,84 @@ body {
 
 ::selection { background: rgba(255,255,255,0.16); }
 
+/* --- field ------------------------------------------------------- */
+#bg, #vignette, #grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+#bg       { z-index: 0; background: #000; transition: background 1.2s ease; }
+#vignette { z-index: 1; background: radial-gradient(130% 110% at 50% 45%,
+              transparent 45%, rgba(0,0,0,0.5) 100%); }
+#grain    {
+  z-index: 2;
+  opacity: 0.028;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='180' height='180' filter='url(%23n)' opacity='0.55'/></svg>");
+  background-size: 180px 180px;
+}
+
+/* --- the numeral ------------------------------------------------- */
+#numeral {
+  position: fixed;
+  z-index: 3;
+  /* left and font-size are measured against the bay it lives in — see
+     placeNumeral() — so it can never cross a hairline at any window size */
+  left: 0;
+  bottom: calc(var(--inset-bottom) - 4.4rem);
+  font-size: 29rem;
+  line-height: 0.72;
+  font-weight: 300;
+  letter-spacing: -0.03em;
+  color: var(--numeral);
+  pointer-events: none;
+  transition: color 1.2s ease;
+  white-space: nowrap;
+}
+#numeral.two { letter-spacing: -0.055em; }
+
+/* --- grid -------------------------------------------------------- */
+#grid {
+  position: fixed;
+  z-index: 4;
+  top: var(--inset-top);
+  bottom: var(--inset-bottom);
+  left: var(--inset-x);
+  right: var(--inset-x);
+  display: grid;
+  grid-template-columns:
+      10.6rem                /* left rail  */
+      minmax(0, 1.25fr)      /* tasks      */
+      minmax(0, 1.05fr)      /* today      */
+      minmax(0, 0.95fr)      /* upcoming   */
+      15rem;                 /* right rail */
+  align-items: stretch;
+}
+
+#grid > section {
+  border-left: 1px solid var(--rule);
+  padding-left: var(--gutter);
+  padding-right: 1.6rem;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;                    /* a wallpaper never scrolls */
+}
+#grid > section:last-child { border-right: 1px solid var(--rule); }
+
+/* the numeral owns the bottom of its own bay; nothing else goes there */
+.col-next { padding-bottom: 17rem; }
+
+/* anything that would run past its bay fades out rather than being sliced */
+.clip {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+/* the fade is added only when there is genuinely more below — see updateClips */
+.clip.masked {
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 2.4rem), transparent 100%);
+          mask-image: linear-gradient(180deg, #000 calc(100% - 2.4rem), transparent 100%);
+}
+
