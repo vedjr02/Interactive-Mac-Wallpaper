@@ -408,3 +408,59 @@ function icsToEvents(text, from, to) {
   }
   return out;
 }
+
+/* --- Calendar.app -------------------------------------------------
+   Scripting Calendar.app is genuinely slow — a full sweep of a dozen
+   calendars takes the better part of a minute. So it never runs on the
+   request path: a background timer refreshes it and /api/state always
+   answers from the cache. Point `icsUrls` at your feeds instead and this
+   whole branch is skipped.
+------------------------------------------------------------------- */
+function runOsascript(script, timeout = 150000) {
+  return new Promise((resolve, reject) => {
+    execFile('osascript', ['-l', 'JavaScript', '-e', script], { timeout, maxBuffer: 8 << 20 },
+      (err, stdout, stderr) => (err ? reject(new Error(stderr || err.message)) : resolve(stdout)));
+  });
+}
+
+function calendarScript(only) {
+  return `
+  var Cal = Application('Calendar');
+  var only = ${JSON.stringify(only || [])};
+  var from = new Date(); from.setDate(from.getDate() - ${WINDOW_BACK}); from.setHours(0,0,0,0);
+  var to   = new Date(); to.setDate(to.getDate() + ${WINDOW_FWD});      to.setHours(23,59,59,0);
+  var out = [];
+  var cals = Cal.calendars();
+  for (var i = 0; i < cals.length; i++) {
+    var name;
+    try { name = cals[i].name(); } catch (e) { continue; }
+    if (only.length && only.indexOf(name) < 0) continue;
+    var evs;
+    /* the whose() filter is what costs the time; resolve it once, then read
+       each event individually — asking the filtered set for a whole property
+       at a time makes Calendar re-run the filter and is far slower. */
+    try {
+      evs = cals[i].events.whose({ _and: [
+        { startDate: { _greaterThan: from } },
+        { startDate: { _lessThan: to } }
+      ]})();
+    } catch (err) { continue; }
+
+    for (var j = 0; j < evs.length; j++) {
+      try {
+        var st = evs[j].startDate();
+        out.push({
+          id: name + '-' + st.getTime() + '-' + j,
+          title: evs[j].summary() || '(no title)',
+          location: evs[j].location() || '',
+          allDay: !!evs[j].alldayEvent(),
+          start: st.toISOString(),
+          end: evs[j].endDate().toISOString(),
+          calendar: name
+        });
+      } catch (err) {}
+    }
+  }
+  JSON.stringify(out);
+`;
+}
