@@ -251,3 +251,160 @@ function parseICS(text) {
   }
   return events.filter((e) => e.start && e.title);
 }
+
+/* --- recurrence --------------------------------------------------- */
+const RR_DAYS = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+
+function parseRRule(s) {
+  const r = {};
+  for (const bit of s.split(';')) {
+    const [k, v] = bit.split('=');
+    if (k) r[k.toUpperCase()] = v;
+  }
+  return {
+    freq: r.FREQ,
+    interval: Math.max(1, parseInt(r.INTERVAL || '1', 10)),
+    count: r.COUNT ? parseInt(r.COUNT, 10) : null,
+    until: r.UNTIL ? (parseDate(r.UNTIL, {}) || {}).date : null,
+    byday: r.BYDAY ? r.BYDAY.split(',') : null,
+    bymonthday: r.BYMONTHDAY ? r.BYMONTHDAY.split(',').map(Number) : null,
+    bymonth: r.BYMONTH ? r.BYMONTH.split(',').map(Number) : null,
+  };
+}
+
+/* every occurrence of `ev` that lands inside [from, to] */
+function expand(ev, from, to) {
+  if (!ev.rrule) return (ev.start >= from && ev.start <= to) ? [ev.start] : [];
+
+  const r = parseRRule(ev.rrule);
+  const out = [];
+  const s = ev.start;
+  const hh = s.getHours(), mm = s.getMinutes();
+  const hardEnd = r.until && r.until < to ? r.until : to;
+  const CAP = 750;
+
+  const push = (d) => {
+    if (d >= from && d <= hardEnd) out.push(d);
+  };
+
+  /* with COUNT we have to walk from the start; otherwise we can jump */
+  const canSkip = !r.count;
+
+  if (r.freq === 'DAILY') {
+    const step = r.interval * 86400000;
+    let n = canSkip ? Math.max(0, Math.floor((from - s) / step)) : 0;
+    const limit = r.count || CAP;
+    for (let i = 0; i < CAP && n < limit; i++, n++) {
+      const d = new Date(s.getTime() + n * step);
+      if (d > hardEnd) break;
+      push(d);
+    }
+  } else if (r.freq === 'WEEKLY') {
+    const days = (r.byday || []).map((d) => RR_DAYS[d.slice(-2)]).filter((x) => x !== undefined);
+    const set = days.length ? days : [s.getDay()];
+    const weekStart = new Date(s.getFullYear(), s.getMonth(), s.getDate() - ((s.getDay() + 6) % 7));
+    const step = r.interval * 7 * 86400000;
+    let n = canSkip ? Math.max(0, Math.floor((from - weekStart) / step)) : 0;
+    let made = 0;
+    for (let i = 0; i < CAP; i++, n++) {
+      const base = new Date(weekStart.getTime() + n * step);
+      if (base.getTime() > hardEnd.getTime() + 7 * 86400000) break;
+      for (const dow of set.slice().sort()) {
+        const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + ((dow + 6) % 7), hh, mm);
+        if (d < s) continue;
+        if (r.count && ++made > r.count) return out;
+        push(d);
+      }
+    }
+  } else if (r.freq === 'MONTHLY' || r.freq === 'YEARLY') {
+    const stepMonths = r.freq === 'YEARLY' ? 12 * r.interval : r.interval;
+    let n = canSkip
+      ? Math.max(0, (from.getFullYear() - s.getFullYear()) * 12 + (from.getMonth() - s.getMonth()) - stepMonths)
+      : 0;
+    n = Math.floor(n / stepMonths) * stepMonths;
+    let made = 0;
+    for (let i = 0; i < 240; i++, n += stepMonths) {
+      const anchor = new Date(s.getFullYear(), s.getMonth() + n, 1);
+      if (anchor > hardEnd) break;
+      if (r.bymonth && !r.bymonth.includes(anchor.getMonth() + 1)) continue;
+
+      let candidates = [];
+      if (r.byday && r.byday.length) {
+        for (const token of r.byday) {
+          const ord = parseInt(token, 10) || 0;
+          const dow = RR_DAYS[token.slice(-2)];
+          if (dow === undefined) continue;
+          const inMonth = [];
+          const last = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate();
+          for (let d = 1; d <= last; d++) {
+            const dt = new Date(anchor.getFullYear(), anchor.getMonth(), d);
+            if (dt.getDay() === dow) inMonth.push(dt);
+          }
+          if (!ord) candidates.push(...inMonth);
+          else candidates.push(ord > 0 ? inMonth[ord - 1] : inMonth[inMonth.length + ord]);
+        }
+      } else {
+        const dayNums = r.bymonthday || [s.getDate()];
+        for (const dn of dayNums) {
+          const last = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate();
+          const day = dn > 0 ? dn : last + 1 + dn;
+          if (day >= 1 && day <= last) candidates.push(new Date(anchor.getFullYear(), anchor.getMonth(), day));
+        }
+      }
+
+      for (const c of candidates.filter(Boolean).sort((a, b) => a - b)) {
+        const d = new Date(c.getFullYear(), c.getMonth(), c.getDate(), hh, mm);
+        if (d < s) continue;
+        if (r.count && ++made > r.count) return out;
+        push(d);
+      }
+    }
+  } else {
+    if (s >= from && s <= to) out.push(s);
+  }
+
+  return out;
+}
+
+function icsToEvents(text, from, to) {
+  const raw = parseICS(text);
+  const overrides = new Map();
+  for (const e of raw) {
+    if (e.recurrenceId) overrides.set(`${e.uid}|${e.recurrenceId}`, e);
+  }
+
+  const out = [];
+  for (const e of raw) {
+    if (e.recurrenceId) continue;
+    if (e.status === 'CANCELLED') continue;
+
+    const dur = e.end ? (e.end - e.start) : (e.duration || (e.allDay ? 86400000 : 3600000));
+    const ex = new Set(e.exdates);
+
+    for (const start of expand(e, from, to)) {
+      if (ex.has(start.getTime())) continue;
+      const o = overrides.get(`${e.uid}|${start.getTime()}`);
+      if (o) {
+        if (o.status === 'CANCELLED') continue;
+        out.push({
+          id: `${e.uid}-${o.start.getTime()}`,
+          title: o.title || e.title,
+          location: o.location || '',
+          allDay: !!o.allDay,
+          start: o.start.toISOString(),
+          end: new Date(o.end || o.start.getTime() + dur).toISOString(),
+        });
+        continue;
+      }
+      out.push({
+        id: `${e.uid}-${start.getTime()}`,
+        title: e.title,
+        location: e.location || '',
+        allDay: !!e.allDay,
+        start: start.toISOString(),
+        end: new Date(start.getTime() + dur).toISOString(),
+      });
+    }
+  }
+  return out;
+}
