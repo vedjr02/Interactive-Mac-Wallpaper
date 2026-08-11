@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wallpape</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="bg"></div>
+<div id="vignette"></div>
+<div id="grain"></div>
+
+<div id="numeral" aria-hidden="true"></div>
+
+<main id="grid">
+
+  <!-- left rail ------------------------------------------------------->
+  <section class="rail rail-left">
+    <div class="year" id="year"></div>
+    <div class="rail-foot">
+      <div class="minical" id="minical"></div>
+    </div>
+  </section>
+
+  <!-- tasks ----------------------------------------------------------->
+  <section class="col col-tasks">
+    <header class="colhead">
+      <span class="label">Task List</span>
+      <span class="meta" id="taskCount"></span>
+    </header>
+    <div class="colbody clip" id="taskBody"></div>
+    <div class="addrow" id="addRow" tabindex="-1">
+      <span class="addcaret"></span>
+      <span class="addhint">Add a task</span>
+      <input id="addInput" type="text" spellcheck="false" autocomplete="off">
+    </div>
+  </section>
+
+  <!-- today ----------------------------------------------------------->
+  <section class="col col-today">
+    <header class="colhead">
+      <span class="label">Today</span>
+      <span class="meta" id="todayDate"></span>
+    </header>
+    <div class="colbody clip" id="todayBody"></div>
+  </section>
+
+  <!-- upcoming -------------------------------------------------------->
+  <section class="col col-next">
+    <header class="colhead">
+      <span class="label">Tomorrow</span>
+      <span class="meta" id="tomorrowDate"></span>
+    </header>
+    <div class="colbody" id="tomorrowBody"></div>
+    <header class="colhead colhead-sub">
+      <span class="label">Later this week</span>
+    </header>
+    <div class="colbody clip" id="laterBody"></div>
+  </section>
+
+  <!-- right rail ------------------------------------------------------>
+  <section class="rail rail-right">
+    <div class="spec" id="weather"></div>
+    <div class="rail-mid">
+      <div class="monthname" id="monthName"></div>
+      <div class="todayline" id="todayLine"></div>
+    </div>
+  </section>
+
+</main>
+
+<!-- the only two visible controls on the whole surface -->
+<div id="controls">
+  <span class="ctl" id="ctlLayout" title="Layout">
+    <svg viewBox="0 0 14 14" aria-hidden="true">
+      <g class="g-cols"><path d="M2.5 2v10M7 2v10M11.5 2v10"/></g>
+      <g class="g-rows"><path d="M2 2.5h10M2 7h10M2 11.5h10"/></g>
+    </svg>
+  </span>
+  <span class="ctl" id="ctlFocus" title="Focus">
+    <svg viewBox="0 0 14 14" aria-hidden="true">
+      <circle class="ring" cx="7" cy="7" r="5"/>
+      <circle class="dot" cx="7" cy="7" r="2.4"/>
+    </svg>
+  </span>
+</div>
+
+<div id="clock"></div>
+
+<script src="palette.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
