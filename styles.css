@@ -352,3 +352,121 @@ body {
 }
 .addrow.open #addInput { display: block; }
 #addInput::placeholder { color: var(--ink-4); }
+
+/* ==================================================================
+   Agenda
+   ================================================================== */
+.ev {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0,1fr);
+  column-gap: 0.6rem;
+  align-items: start;
+  padding: 0.28rem 0 0.3rem;
+}
+.ev + .ev { border-top: 1px solid rgba(255,255,255,0.035); }
+.ev.past { opacity: 0.38; }
+
+.evtime {
+  font-size: 0.635rem;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+  color: var(--ink-3);
+  padding-top: 0.12rem;
+}
+.evtitle {
+  font-size: 0.815rem;
+  font-weight: 430;
+  line-height: 1.34;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.evsub {
+  font-size: 0.635rem;
+  font-weight: 430;
+  color: var(--ink-3);
+  margin-top: 0.1rem;
+}
+.ev.now .evtitle { font-weight: 510; }
+
+/* the now line */
+.nowline {
+  position: relative;
+  height: 0;
+  border-top: 1px solid rgba(255,255,255,0.30);
+  margin: 0.42rem 0;
+}
+.nowline::before {
+  content: '';
+  position: absolute;
+  left: -0.13rem; top: -0.2rem;
+  width: 0.28rem; height: 0.28rem;
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+.daylabel {
+  font-size: 0.635rem;
+  font-weight: 590;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin: 0.9rem 0 0.45rem;
+  display: block;
+}
+.daylabel:first-child { margin-top: 0; }
+
+.empty {
+  font-size: 0.78rem;
+  font-weight: 430;
+  color: var(--ink-4);
+  padding: 0.2rem 0;
+}
+
+/* ==================================================================
+   Right rail
+   ================================================================== */
+.rail-right { text-align: left; padding-top: 2.1rem; }   /* clears the controls */
+.rail-mid { margin-top: auto; margin-bottom: auto; }
+
+.monthname {
+  font-size: 1.95rem;
+  font-weight: 280;
+  letter-spacing: -0.012em;
+  color: var(--ink);
+  line-height: 1;
+}
+
+.spec {
+  font-size: 0.635rem;
+  font-weight: 620;
+  line-height: 1.42;
+  letter-spacing: 0.005em;
+  color: var(--ink);
+}
+.spec .dim { color: var(--ink-2); font-weight: 500; }
+
+/* ==================================================================
+   Clock
+   ================================================================== */
+#clock {
+  position: fixed;
+  z-index: 4;
+  left: var(--inset-x);
+  bottom: calc(var(--inset-bottom) - 2.3rem);
+  font-size: 0.645rem;
+  font-weight: 590;
+  letter-spacing: 0.14em;
+  color: var(--ink-4);
+}
+
+.todayline {
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--ink-3);
+  margin-top: 0.4rem;
+  letter-spacing: 0.005em;
+}
