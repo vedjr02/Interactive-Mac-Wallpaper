@@ -145,3 +145,42 @@ const view = (() => {
 
 $('ctlLayout').addEventListener('click', () => { view.rows = !view.rows; applyView(view); });
 $('ctlFocus').addEventListener('click', () => { view.focus = !view.focus; applyView(view); });
+
+/* ------------------------------------------------------------------
+   dates
+------------------------------------------------------------------- */
+const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const key = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const daysBetween = (a, b) => Math.round((startOfDay(b) - startOfDay(a)) / 86400000);
+
+function fmtTime(d) {
+  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+function fmtDayLabel(d) {
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/* ------------------------------------------------------------------
+   mini calendar
+------------------------------------------------------------------- */
+function renderMiniCal(now) {
+  const y = now.getFullYear(), m = now.getMonth();
+  const first = new Date(y, m, 1);
+  const lead = (first.getDay() + 6) % 7;                 // Monday-first
+  const days = new Date(y, m + 1, 0).getDate();
+
+  let html = DOW.map((d) => `<span class="mc-dow">${d[0]}</span>`).join('');
+  for (let i = 0; i < lead; i++) html += '<span></span>';
+  for (let d = 1; d <= days; d++) {
+    const today = d === now.getDate() ? ' class="mc-today"' : '';
+    html += `<span${today}>${d}</span>`;
+  }
+  $('minical').innerHTML = html;
+}
