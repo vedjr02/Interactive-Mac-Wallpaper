@@ -70,3 +70,78 @@ function paintMonth(d) {
   placeNumeral();
 }
 
+/* The numeral is sized and centred against whichever bay it belongs to, so
+   it fills that bay on any display and never crosses a hairline. */
+function placeNumeral() {
+  const n = $('numeral');
+  const rows = document.body.classList.contains('layout-rows');
+  const bay = document.querySelector(rows ? '.rail-right' : '.col-next');
+  if (!bay || !n.textContent) return;
+
+  const next = document.querySelector('.col-next');
+  const right = document.querySelector('.rail-right');
+
+  /* measure everything at its natural size before reserving anything */
+  right.style.paddingRight = '';
+  next.style.paddingBottom = '';
+
+  const b = bay.getBoundingClientRect();
+  if (b.width <= 24) return;
+
+  n.style.fontSize = '100px';
+  const unit = n.getBoundingClientRect().width / 100 || 0.55;
+
+  /* columns: fill the bay's width. rows: take only what the rail's own
+     blocks leave over, capped by the height of the foot band. */
+  const contentRight = Math.max(b.left, ...[...right.children]
+    .filter((el) => el.offsetParent)
+    .map((el) => el.getBoundingClientRect().right));
+
+  const size = rows
+    ? Math.min(b.height * 1.22, (b.right - 14 - contentRight - 26) / unit)
+    : Math.min((b.width - 24) * 0.92 / unit, 620);
+
+  /* a date big enough to read, or none at all */
+  if (!(size > 64)) { n.style.visibility = 'hidden'; return; }
+  n.style.visibility = '';
+  n.style.fontSize = size + 'px';
+
+  const r = n.getBoundingClientRect();
+  if (rows) {
+    n.style.left = (b.right - 14 - r.width) + 'px';
+    n.style.bottom = (innerHeight - b.bottom + size * 0.04) + 'px';
+  } else {
+    n.style.left = (b.left + (b.width - r.width) / 2) + 'px';
+    n.style.bottom = '';                         /* back to the stylesheet */
+    next.style.paddingBottom = (r.height + 26) + 'px';
+  }
+}
+
+/* fade the foot of a column only when something is actually cut off */
+function updateClips() {
+  for (const el of document.querySelectorAll('.clip')) {
+    el.classList.toggle('masked', el.scrollHeight > el.clientHeight + 1);
+  }
+}
+
+/* ------------------------------------------------------------------
+   view modes — columns / rows, and focus
+------------------------------------------------------------------- */
+const VIEW = 'wallpape.view';
+
+function applyView(v) {
+  document.body.classList.toggle('layout-rows', v.rows);
+  document.body.classList.toggle('focus', v.focus);
+  try { localStorage.setItem(VIEW, JSON.stringify(v)); } catch {}
+  requestAnimationFrame(() => { placeNumeral(); updateClips(); });
+}
+
+addEventListener('resize', () => { placeNumeral(); updateClips(); });
+
+const view = (() => {
+  try { return { rows: false, focus: false, ...JSON.parse(localStorage.getItem(VIEW)) }; }
+  catch { return { rows: false, focus: false }; }
+})();
+
+$('ctlLayout').addEventListener('click', () => { view.rows = !view.rows; applyView(view); });
+$('ctlFocus').addEventListener('click', () => { view.focus = !view.focus; applyView(view); });
