@@ -464,3 +464,79 @@ function calendarScript(only) {
   JSON.stringify(out);
 `;
 }
+
+/* ------------------------------------------------------------------
+   the event cache — filled by background timers, read instantly
+------------------------------------------------------------------- */
+let calCache = { events: [], source: 'none', at: 0 };
+let appBusy = false;
+
+const getEvents = () => calCache.events;
+
+function windowBounds() {
+  const n = new Date();
+  return [
+    new Date(n.getFullYear(), n.getMonth(), n.getDate() - WINDOW_BACK),
+    new Date(n.getFullYear(), n.getMonth(), n.getDate() + WINDOW_FWD, 23, 59, 59),
+  ];
+}
+
+function commit(events, source) {
+  const seen = new Set();
+  calCache = {
+    at: Date.now(),
+    source,
+    events: events
+      .filter((e) => {
+        const k = e.title + '|' + e.start;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      })
+      .sort((a, b) => new Date(a.start) - new Date(b.start)),
+  };
+}
+
+async function refreshFeeds() {
+  const [from, to] = windowBounds();
+  const events = [];
+  for (const url of config.icsUrls) {
+    try {
+      const r = await fetch(url.replace(/^webcal:/, 'https:'), { signal: AbortSignal.timeout(20000) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      events.push(...icsToEvents(await r.text(), from, to));
+    } catch (e) {
+      log('feed failed:', url.slice(0, 50) + '…', e.message);
+    }
+  }
+  commit(events, 'feeds');
+  log(`feeds: ${calCache.events.length} events`);
+}
+
+async function refreshCalendarApp() {
+  if (appBusy) return;
+  appBusy = true;
+  const t0 = Date.now();
+  try {
+    const raw = await runOsascript(calendarScript(config.calendars));
+    commit(JSON.parse(raw.trim() || '[]'), 'calendar.app');
+    log(`Calendar.app: ${calCache.events.length} events in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
+  } catch (e) {
+    log('Calendar.app unavailable:', e.message.split('\n')[0].slice(0, 120));
+  } finally {
+    appBusy = false;
+  }
+}
+
+function startCalendarLoop() {
+  if (config.icsUrls && config.icsUrls.length) {
+    refreshFeeds();
+    setInterval(refreshFeeds, 5 * 60 * 1000);
+    return;
+  }
+  if (config.useCalendarApp) {
+    log('no icsUrls set — falling back to Calendar.app (slow; first sweep can take a minute)');
+    refreshCalendarApp();
+    setInterval(refreshCalendarApp, 15 * 60 * 1000);
+  }
+}
