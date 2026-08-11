@@ -150,11 +150,13 @@ function updateClips() {
 ------------------------------------------------------------------- */
 const VIEW = 'wallpape.view';
 
+/* Timers, not requestAnimationFrame: a wallpaper sits behind every window
+   and the compositor may never call an animation frame. */
 function applyView(v) {
   document.body.classList.toggle('layout-rows', v.rows);
   document.body.classList.toggle('focus', v.focus);
   try { localStorage.setItem(VIEW, JSON.stringify(v)); } catch {}
-  requestAnimationFrame(() => { placeNumeral(); updateClips(); });
+  setTimeout(() => { placeNumeral(); updateClips(); }, 0);
 }
 
 addEventListener('resize', () => { placeNumeral(); updateClips(); });
@@ -164,7 +166,28 @@ const view = (() => {
   catch { return { rows: false, focus: false }; }
 })();
 
-$('ctlLayout').addEventListener('click', () => { view.rows = !view.rows; applyView(view); });
+/* A layout change re-lays the whole grid, which can't be tweened. So it
+   crosses through black instead: half the time out, re-lay while nothing
+   is on screen, half the time back. */
+const SWAP = 1500;
+let swapping = false;
+
+$('ctlLayout').addEventListener('click', () => {
+  if (swapping) return;
+  swapping = true;
+  document.body.classList.add('swapping');
+
+  setTimeout(() => {
+    view.rows = !view.rows;
+    applyView(view);
+    /* let the new tracks and the numeral settle before fading back in */
+    setTimeout(() => {
+      document.body.classList.remove('swapping');
+      setTimeout(() => { swapping = false; }, SWAP);
+    }, 50);
+  }, SWAP);
+});
+
 $('ctlFocus').addEventListener('click', () => { view.focus = !view.focus; applyView(view); });
 
 /* ------------------------------------------------------------------
@@ -578,8 +601,8 @@ async function refresh() {
 
 (async function boot() {
   applyView(view);
-  /* let the persisted view land instantly; only then arm the 5s fades */
-  requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.add('ready')));
+  /* let the persisted view land instantly; only then arm the fades */
+  setTimeout(() => document.body.classList.add('ready'), 60);
   tick();
   await refresh();
   tick();
