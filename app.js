@@ -325,3 +325,116 @@ function taskRow(t) {
     </div>`;
 }
 
+/* --- interactions ------------------------------------------------- */
+$('taskBody').addEventListener('click', (e) => {
+  const row = e.target.closest('.task');
+  if (!row) return;
+  const id = row.dataset.id;
+  const t = state.tasks.find((x) => x.id === id);
+  if (!t) return;
+
+  switch (e.target.dataset.act) {
+    case 'toggle':
+      t.done = !t.done;
+      t.completedOn = t.done ? key(new Date()) : null;
+      row.classList.toggle('done', t.done);
+      mutate('PATCH', `/api/tasks/${id}`, { done: t.done, completedOn: t.completedOn });
+      saveLocal();
+      setTimeout(renderTasks, 220);
+      break;
+
+    case 'status':
+      t.status = t.status === 'progress' ? 'todo' : 'progress';
+      mutate('PATCH', `/api/tasks/${id}`, { status: t.status });
+      saveLocal();
+      renderTasks();
+      break;
+
+    case 'delete':
+      row.classList.add('fadeout');
+      state.tasks = state.tasks.filter((x) => x.id !== id);
+      mutate('DELETE', `/api/tasks/${id}`);
+      saveLocal();
+      setTimeout(renderTasks, 200);
+      break;
+
+    case 'edit':
+      beginEdit(e.target, t);
+      break;
+  }
+});
+
+function beginEdit(el, t) {
+  if (state.editing) return;
+  state.editing = true;
+  const before = t.title;
+  el.contentEditable = 'true';
+  el.spellcheck = false;
+  el.focus();
+
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  range.collapse(false);
+  const sel = getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+
+  const finish = (commit) => {
+    el.contentEditable = 'false';
+    el.removeEventListener('keydown', onKey);
+    el.removeEventListener('blur', onBlur);
+    state.editing = false;
+
+    const next = el.textContent.trim();
+    if (!commit || next === before) { renderTasks(); return; }
+
+    if (!next) {
+      state.tasks = state.tasks.filter((x) => x.id !== t.id);
+      mutate('DELETE', `/api/tasks/${t.id}`);
+    } else {
+      t.title = next;
+      mutate('PATCH', `/api/tasks/${t.id}`, { title: next });
+    }
+    saveLocal();
+    renderTasks();
+  };
+
+  const onKey = (ev) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); finish(true); }
+    if (ev.key === 'Escape') { ev.preventDefault(); finish(false); }
+  };
+  const onBlur = () => finish(true);
+  el.addEventListener('keydown', onKey);
+  el.addEventListener('blur', onBlur);
+}
+
+/* --- add ---------------------------------------------------------- */
+const addRow = $('addRow'), addInput = $('addInput');
+
+addRow.addEventListener('click', () => {
+  addRow.classList.add('open');
+  addInput.focus();
+});
+addInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const raw = addInput.value.trim();
+    if (raw) {
+      const { title, due } = parseDue(raw);
+      const t = {
+        id: 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        title, due, done: false, status: 'todo', createdAt: new Date().toISOString(),
+      };
+      state.tasks.push(t);
+      mutate('POST', '/api/tasks', t);
+      saveLocal();
+      renderTasks();
+    }
+    addInput.value = '';
+    if (!e.shiftKey) { addInput.blur(); }
+  }
+  if (e.key === 'Escape') { addInput.value = ''; addInput.blur(); }
+});
+addInput.addEventListener('blur', () => {
+  addRow.classList.remove('open');
+  addInput.value = '';
+});
