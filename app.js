@@ -113,11 +113,13 @@ function placeNumeral() {
   } else {
     /* the corner: from the upcoming bay out to the frame edge, and from
        under the rail down past the grid, so it reads as cropped by the
-       screen rather than parked above the Dock */
+       screen rather than parked above the Dock. FILL is how much of that
+       corner the date actually claims — turn it up to shout. */
     const BLEED = 52;
-    size = Math.min(
+    const FILL = 0.62;
+    size = FILL * Math.min(
       (grid.bottom + BLEED - (railFloor + 26)) / unitH,
-      (grid.right - 6 - b.left) * 0.99 / unitW,
+      (grid.right - 6 - b.left) / unitW,
     );
     leftOf = (w) => grid.right - 6 - w;
     bottomPx = innerHeight - grid.bottom - BLEED;
