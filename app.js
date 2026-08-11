@@ -628,6 +628,8 @@ async function refresh() {
   tick();
   await refresh();
   tick();
-  setInterval(tick, 20000);            /* clock, now-line, midnight rollover */
-  setInterval(refresh, 5 * 60 * 1000); /* calendar, weather, tasks */
+  setInterval(tick, 20000);   /* clock, now-line, midnight rollover */
+  /* the bridge answers from cache, so polling often costs nothing and keeps
+     the lag behind a newly added event as short as the sweep allows */
+  setInterval(refresh, 60 * 1000);
 })();
