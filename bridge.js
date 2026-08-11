@@ -137,3 +137,117 @@ async function getWeather() {
   }
   return weatherCache.data;
 }
+
+/* ==================================================================
+   iCalendar
+   ================================================================== */
+
+/* offset of a time zone at a given instant, in ms */
+function tzOffset(date, tz) {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+  const o = {};
+  for (const p of dtf.formatToParts(date)) o[p.type] = p.value;
+  return Date.UTC(+o.year, +o.month - 1, +o.day, +o.hour % 24, +o.minute, +o.second) - date.getTime();
+}
+
+/* wall-clock time in `tz` → a real instant */
+function zonedToUtc(y, mo, d, h, mi, s, tz) {
+  const wall = Date.UTC(y, mo - 1, d, h, mi, s);
+  try {
+    let guess = wall;
+    for (let i = 0; i < 2; i++) guess = wall - tzOffset(new Date(guess), tz);
+    return new Date(guess);
+  } catch {
+    return new Date(y, mo - 1, d, h, mi, s);
+  }
+}
+
+function unfold(text) {
+  return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n[ \t]/g, '');
+}
+
+function parseParams(chunk) {
+  const params = {};
+  for (const bit of chunk.split(';').slice(1)) {
+    const i = bit.indexOf('=');
+    if (i > 0) params[bit.slice(0, i).toUpperCase()] = bit.slice(i + 1).replace(/^"|"$/g, '');
+  }
+  return params;
+}
+
+/* one DTSTART/DTEND/EXDATE value → { date, allDay } */
+function parseDate(value, params) {
+  const m = value.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?$/);
+  if (!m) return null;
+  const [, y, mo, d, h, mi, s, z] = m;
+  if (!h) return { date: new Date(+y, +mo - 1, +d), allDay: true };
+  if (z) return { date: new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, +s)), allDay: false };
+  if (params.TZID) return { date: zonedToUtc(+y, +mo, +d, +h, +mi, +s, params.TZID), allDay: false };
+  return { date: new Date(+y, +mo - 1, +d, +h, +mi, +s), allDay: false };
+}
+
+function unescapeText(v) {
+  return v.replace(/\\n/gi, ' ').replace(/\\([,;\\])/g, '$1').trim();
+}
+
+function parseDuration(v) {
+  const m = v.match(/^([+-])?P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/);
+  if (!m) return 0;
+  const sign = m[1] === '-' ? -1 : 1;
+  const [, , w, d, h, mi, s] = m;
+  return sign * (((+w || 0) * 7 + (+d || 0)) * 86400 + (+h || 0) * 3600 + (+mi || 0) * 60 + (+s || 0)) * 1000;
+}
+
+function parseICS(text) {
+  const events = [];
+  let cur = null;
+
+  for (const line of unfold(text).split('\n')) {
+    if (line === 'BEGIN:VEVENT') { cur = { exdates: [] }; continue; }
+    if (line === 'END:VEVENT') { if (cur) events.push(cur); cur = null; continue; }
+    if (!cur) continue;
+
+    const c = line.indexOf(':');
+    if (c < 0) continue;
+    const head = line.slice(0, c);
+    const value = line.slice(c + 1);
+    const name = head.split(';')[0].toUpperCase();
+    const params = parseParams(head);
+
+    switch (name) {
+      case 'UID':      cur.uid = value; break;
+      case 'SUMMARY':  cur.title = unescapeText(value); break;
+      case 'LOCATION': cur.location = unescapeText(value); break;
+      case 'STATUS':   cur.status = value.toUpperCase(); break;
+      case 'RRULE':    cur.rrule = value; break;
+      case 'DURATION': cur.duration = parseDuration(value); break;
+      case 'DTSTART': {
+        const p = parseDate(value, params);
+        if (p) { cur.start = p.date; cur.allDay = p.allDay; cur.tzid = params.TZID || null; }
+        break;
+      }
+      case 'DTEND': {
+        const p = parseDate(value, params);
+        if (p) cur.end = p.date;
+        break;
+      }
+      case 'RECURRENCE-ID': {
+        const p = parseDate(value, params);
+        if (p) cur.recurrenceId = p.date.getTime();
+        break;
+      }
+      case 'EXDATE': {
+        for (const v of value.split(',')) {
+          const p = parseDate(v, params);
+          if (p) cur.exdates.push(p.date.getTime());
+        }
+        break;
+      }
+    }
+  }
+  return events.filter((e) => e.start && e.title);
+}
