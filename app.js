@@ -438,3 +438,91 @@ addInput.addEventListener('blur', () => {
   addRow.classList.remove('open');
   addInput.value = '';
 });
+
+/* ------------------------------------------------------------------
+   agenda
+------------------------------------------------------------------- */
+function eventsOn(d) {
+  const k = key(d);
+  return state.events
+    .filter((e) => key(e.start) === k)
+    .sort((a, b) => (a.allDay === b.allDay ? a.start - b.start : a.allDay ? -1 : 1));
+}
+
+function evRow(e, now) {
+  const past = !e.allDay && e.end < now;
+  const live = !e.allDay && e.start <= now && e.end > now;
+  return `
+    <div class="ev${past ? ' past' : ''}${live ? ' now' : ''}">
+      <div class="evtime">${e.allDay ? 'all day' : fmtTime(e.start)}</div>
+      <div>
+        <div class="evtitle">${esc(e.title)}</div>
+        ${e.location ? `<div class="evsub">${esc(e.location)}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+function renderAgenda(now) {
+  /* today, with a hairline where we are in the day */
+  const today = eventsOn(now);
+  let html = '';
+  let placed = false;
+  for (const e of today) {
+    if (!placed && !e.allDay && e.start > now) { html += '<div class="nowline"></div>'; placed = true; }
+    html += evRow(e, now);
+  }
+  if (!placed && today.length) html += '<div class="nowline"></div>';
+  $('todayBody').innerHTML = html || '<div class="empty">Nothing scheduled</div>';
+  $('todayDate').textContent = fmtDayLabel(now);
+
+  /* tomorrow */
+  const tm = addDays(now, 1);
+  const tmEvents = eventsOn(tm);
+  $('tomorrowBody').innerHTML =
+    tmEvents.slice(0, 6).map((e) => evRow(e, now)).join('') || '<div class="empty">Clear</div>';
+  $('tomorrowDate').textContent = fmtDayLabel(tm);
+
+  /* the rest of the week — a glance, not a second agenda */
+  let later = '';
+  let shown = 0, hidden = 0;
+  for (let i = 2; i <= 7 && shown < 7; i++) {
+    const evs = eventsOn(addDays(now, i));
+    if (!evs.length) continue;
+    const take = evs.slice(0, 2);
+    hidden += evs.length - take.length;
+    shown += take.length;
+    later += `<span class="daylabel">${fmtDayLabel(addDays(now, i))}</span>` +
+             take.map((e) => evRow(e, now)).join('');
+  }
+  if (hidden) later += `<div class="empty">+${hidden} more</div>`;
+  $('laterBody').innerHTML = later || '<div class="empty">Clear</div>';
+
+  updateClips();
+}
+
+/* ------------------------------------------------------------------
+   weather
+------------------------------------------------------------------- */
+const WMO = {
+  0: 'Clear', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
+  45: 'Fog', 48: 'Freezing fog', 51: 'Light drizzle', 53: 'Drizzle', 55: 'Heavy drizzle',
+  56: 'Freezing drizzle', 57: 'Freezing drizzle', 61: 'Light rain', 63: 'Rain', 65: 'Heavy rain',
+  66: 'Freezing rain', 67: 'Freezing rain', 71: 'Light snow', 73: 'Snow', 75: 'Heavy snow',
+  77: 'Snow grains', 80: 'Light showers', 81: 'Showers', 82: 'Heavy showers',
+  85: 'Snow showers', 86: 'Snow showers', 95: 'Thunderstorm', 96: 'Thunderstorm, hail',
+  99: 'Thunderstorm, hail',
+};
+
+function renderWeather() {
+  const w = state.weather;
+  if (!w) { $('weather').innerHTML = ''; return; }
+  const t = Math.round(w.temp);
+  const feels = Math.round(w.feels);
+  const hi = Math.round(w.max), lo = Math.round(w.min);
+  $('weather').innerHTML = [
+    esc(WMO[w.code] || 'Weather'),
+    `${t}&deg; &middot; feels ${feels}&deg;`,
+    `H ${hi}&deg; L ${lo}&deg; &middot; Wind ${Math.round(w.wind)} km/h`,
+    state.place ? `<span class="dim">${esc(state.place)}</span>` : '',
+  ].filter(Boolean).join('<br>');
+}
