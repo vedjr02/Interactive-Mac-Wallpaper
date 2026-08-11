@@ -134,3 +134,72 @@ body {
           mask-image: linear-gradient(180deg, #000 calc(100% - 2.4rem), transparent 100%);
 }
 
+/* --- micro type -------------------------------------------------- */
+.label {
+  font-size: 0.645rem;
+  font-weight: 590;
+  letter-spacing: 0.115em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.meta {
+  font-size: 0.645rem;
+  font-weight: 510;
+  letter-spacing: 0.055em;
+  color: var(--ink-3);
+  white-space: nowrap;
+  flex: none;
+}
+
+.colhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding-bottom: 0.7rem;
+  margin-bottom: 0.85rem;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.colhead-sub { margin-top: 1.9rem; }
+
+.colbody { min-height: 0; }
+
+/* ==================================================================
+   Left rail
+   ================================================================== */
+.year {
+  font-size: 0.645rem;
+  font-weight: 590;
+  letter-spacing: 0.14em;
+  color: var(--ink-3);
+}
+.rail-foot { margin-top: auto; }
+
+.minical {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.3rem 0.04rem;
+  width: 100%;                 /* the rail's padding does the spacing */
+}
+.minical span {
+  font-size: 0.60rem;
+  font-weight: 430;
+  letter-spacing: 0;
+  color: var(--ink-3);
+  text-align: center;
+  line-height: 1.1rem;
+  height: 1.1rem;
+  border-radius: 0.18rem;
+}
+.minical .mc-dow {
+  font-weight: 590;
+  color: var(--ink-4);
+  letter-spacing: 0.02em;
+  margin-bottom: 0.12rem;
+}
+.minical .mc-today {
+  color: var(--ink);
+  background: rgba(255,255,255,0.13);
+  font-weight: 590;
+}
