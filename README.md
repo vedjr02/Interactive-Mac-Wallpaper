@@ -132,9 +132,12 @@ Layout notes worth knowing before you edit:
 
 - Hairlines are `border-left` on the grid sections, so they can never drift out
   of alignment with the content.
-- The giant numeral measures the bay it sits in (`placeNumeral` in `app.js`)
-  and sizes itself to fit. It never crosses a rule, at any window size, in
-  either layout, for one- or two-digit months.
+- The big figure is **today's date**, repainted at midnight. It owns the
+  bottom-right corner and is drawn in SF Pro's condensed width so two digits
+  can still stand tall. `placeNumeral` in `app.js` measures the corner, sizes
+  the figure to fill it, and reserves the space back out of the upcoming
+  column — so it never lands on a line of text or runs past the frame, at any
+  window size, in either layout, on any day of the month.
 - Columns that overflow get a fade at the foot, and only when something is
   genuinely cut off.
 - `--inset-top` and `--inset-bottom` in `styles.css` keep content clear of the
