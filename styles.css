@@ -74,20 +74,22 @@ body {
 #numeral {
   position: fixed;
   z-index: 3;
-  /* left and font-size are measured against the bay it lives in — see
-     placeNumeral() — so it can never cross a hairline at any window size */
+  /* left, bottom and font-size are all measured — see placeNumeral() — so the
+     figure fills its corner at any window size without crossing a hairline */
   left: 0;
-  bottom: calc(var(--inset-bottom) - 4.4rem);
+  bottom: 0;
   font-size: 29rem;
   line-height: 0.72;
-  font-weight: 300;
-  letter-spacing: -0.03em;
+  font-weight: 250;
+  /* SF Pro carries a real width axis; condensing it buys height for two
+     digits without distorting the letterforms */
+  font-stretch: 50%;
+  letter-spacing: -0.015em;
   color: var(--numeral);
   pointer-events: none;
   transition: color 1.2s ease;
   white-space: nowrap;
 }
-#numeral.two { letter-spacing: -0.055em; }
 
 /* --- grid -------------------------------------------------------- */
 #grid {
@@ -430,7 +432,8 @@ body {
    Right rail
    ================================================================== */
 .rail-right { text-align: left; padding-top: 2.1rem; }   /* clears the controls */
-.rail-mid { margin-top: auto; margin-bottom: auto; }
+/* the month sits high so the bottom-right corner belongs to the date */
+.rail-mid { margin-top: 5.5rem; margin-bottom: auto; }
 
 .monthname {
   font-size: 1.95rem;
