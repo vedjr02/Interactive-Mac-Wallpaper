@@ -70,8 +70,9 @@ function paintMonth(d) {
   placeNumeral();
 }
 
-/* The numeral is sized and centred against whichever bay it belongs to, so
-   it fills that bay on any display and never crosses a hairline. */
+/* The date owns the bottom-right corner. Its size, and the space every other
+   block gives up to it, are measured rather than assumed — so it fills the
+   corner on any display without ever crossing a hairline or a line of text. */
 function placeNumeral() {
   const n = $('numeral');
   const rows = document.body.classList.contains('layout-rows');
@@ -85,21 +86,42 @@ function placeNumeral() {
   right.style.paddingRight = '';
   next.style.paddingBottom = '';
 
+  const grid = $('grid').getBoundingClientRect();
   const b = bay.getBoundingClientRect();
   if (b.width <= 24) return;
 
   n.style.fontSize = '100px';
-  const unit = n.getBoundingClientRect().width / 100 || 0.55;
+  const r0 = n.getBoundingClientRect();
+  const unitW = r0.width / 100 || 0.70;
+  const unitH = r0.height / 100 || 0.72;
 
-  /* columns: fill the bay's width. rows: take only what the rail's own
-     blocks leave over, capped by the height of the foot band. */
-  const contentRight = Math.max(b.left, ...[...right.children]
+  /* the lowest thing in the right rail — the figure starts below it */
+  const railFloor = Math.max(grid.top, ...[...right.children]
     .filter((el) => el.offsetParent)
-    .map((el) => el.getBoundingClientRect().right));
+    .map((el) => el.getBoundingClientRect().bottom));
 
-  const size = rows
-    ? Math.min(b.height * 1.22, (b.right - 14 - contentRight - 26) / unit)
-    : Math.min((b.width - 24) * 0.92 / unit, 620);
+  let size, leftOf, bottomPx;
+
+  if (rows) {
+    /* the foot band: take what the rail's own blocks leave over */
+    const contentRight = Math.max(b.left, ...[...right.children]
+      .filter((el) => el.offsetParent)
+      .map((el) => el.getBoundingClientRect().right));
+    size = Math.min(b.height * 1.3, (b.right - 14 - contentRight - 26) / unitW);
+    leftOf = (w) => b.right - 14 - w;
+    bottomPx = innerHeight - b.bottom + size * 0.04;
+  } else {
+    /* the corner: from the upcoming bay out to the frame edge, and from
+       under the rail down past the grid, so it reads as cropped by the
+       screen rather than parked above the Dock */
+    const BLEED = 52;
+    size = Math.min(
+      (grid.bottom + BLEED - (railFloor + 26)) / unitH,
+      (grid.right - 6 - b.left) * 0.99 / unitW,
+    );
+    leftOf = (w) => grid.right - 6 - w;
+    bottomPx = innerHeight - grid.bottom - BLEED;
+  }
 
   /* a date big enough to read, or none at all */
   if (!(size > 64)) { n.style.visibility = 'hidden'; return; }
@@ -107,14 +129,11 @@ function placeNumeral() {
   n.style.fontSize = size + 'px';
 
   const r = n.getBoundingClientRect();
-  if (rows) {
-    n.style.left = (b.right - 14 - r.width) + 'px';
-    n.style.bottom = (innerHeight - b.bottom + size * 0.04) + 'px';
-  } else {
-    n.style.left = (b.left + (b.width - r.width) / 2) + 'px';
-    n.style.bottom = '';                         /* back to the stylesheet */
-    next.style.paddingBottom = (r.height + 26) + 'px';
-  }
+  n.style.left = leftOf(r.width) + 'px';
+  n.style.bottom = bottomPx + 'px';
+
+  /* hold the upcoming column clear of it */
+  if (!rows) next.style.paddingBottom = Math.max(0, grid.bottom - r.top + 22) + 'px';
 }
 
 /* fade the foot of a column only when something is actually cut off */
