@@ -364,9 +364,13 @@ body {
   column-gap: 0.6rem;
   align-items: start;
   padding: 0.28rem 0 0.3rem;
+  opacity: 0.46;                        /* rests quiet, like the task list */
+  transition: opacity 0.2s ease;
 }
+.ev:hover { opacity: 1; }
 .ev + .ev { border-top: 1px solid rgba(255,255,255,0.035); }
-.ev.past { opacity: 0.38; }
+.ev.past { opacity: 0.24; }
+.ev.past:hover { opacity: 0.7; }
 
 .evtime {
   font-size: 0.635rem;
@@ -516,12 +520,26 @@ body.ready .col-tasks,
 body.ready .col-today,
 body.ready .col-next,
 body.ready #clock {
-  transition: opacity 5s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 body.focus .col-tasks,
 body.focus .col-today,
 body.focus .col-next,
 body.focus #clock {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ==================================================================
+   Layout swap — the grid can't tween its own tracks, so it crosses
+   through black: 1.5s out, re-lay, 1.5s back.
+   ================================================================== */
+body.ready #grid,
+body.ready #numeral {
+  transition: opacity 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+body.swapping #grid,
+body.swapping #numeral {
   opacity: 0;
   pointer-events: none;
 }
