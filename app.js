@@ -526,3 +526,42 @@ function renderWeather() {
     state.place ? `<span class="dim">${esc(state.place)}</span>` : '',
   ].filter(Boolean).join('<br>');
 }
+
+/* ------------------------------------------------------------------
+   loop
+------------------------------------------------------------------- */
+function tick() {
+  const now = new Date();
+  const k = key(now);
+
+  if (k !== state.stamp) {          /* first run, or we crossed midnight */
+    state.stamp = k;
+    paintMonth(now);
+    renderMiniCal(now);
+    renderTasks();
+  }
+
+  $('clock').textContent = state.online
+    ? fmtTime(now)
+    : `${fmtTime(now)}  ·  offline`;
+
+  renderAgenda(now);
+}
+
+async function refresh() {
+  await pull();
+  renderTasks();
+  renderWeather();
+  renderAgenda(new Date());
+}
+
+(async function boot() {
+  applyView(view);
+  /* let the persisted view land instantly; only then arm the 5s fades */
+  requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.add('ready')));
+  tick();
+  await refresh();
+  tick();
+  setInterval(tick, 20000);            /* clock, now-line, midnight rollover */
+  setInterval(refresh, 5 * 60 * 1000); /* calendar, weather, tasks */
+})();
