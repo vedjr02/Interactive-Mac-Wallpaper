@@ -184,3 +184,50 @@ function renderMiniCal(now) {
   }
   $('minical').innerHTML = html;
 }
+
+/* ------------------------------------------------------------------
+   data layer — bridge, with a local fallback
+------------------------------------------------------------------- */
+const LS = 'wallpape.tasks';
+
+async function api(path, opts) {
+  const r = await fetch(path, Object.assign({ cache: 'no-store' }, opts));
+  if (!r.ok) throw new Error(r.status + ' ' + path);
+  return r.json();
+}
+
+function localTasks() {
+  try { return JSON.parse(localStorage.getItem(LS)) || []; } catch { return []; }
+}
+function saveLocal() {
+  try { localStorage.setItem(LS, JSON.stringify(state.tasks)); } catch {}
+}
+
+async function pull() {
+  try {
+    const d = await api('/api/state');
+    state.online = true;
+    state.tasks = d.tasks || [];
+    state.events = (d.events || []).map((e) => ({
+      ...e, start: new Date(e.start), end: new Date(e.end),
+    }));
+    state.weather = d.weather || null;
+    state.place = d.place || null;
+  } catch {
+    state.online = false;
+    state.tasks = localTasks();
+    state.events = [];
+    state.weather = null;
+  }
+}
+
+async function mutate(method, path, body) {
+  if (!state.online) { saveLocal(); return; }
+  try {
+    await api(path, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch { /* keep the optimistic UI; the next pull reconciles */ }
+}
