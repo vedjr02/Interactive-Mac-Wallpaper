@@ -1,0 +1,55 @@
+/* ==================================================================
+   Wallpape — a desktop-wallpaper interface for Plash
+   Swiss grid, SF Pro, hairline rules, no visible chrome.
+   ================================================================== */
+
+/* --- scale ------------------------------------------------------- */
+html { font-size: 16px; }
+@media (max-width: 1500px) { html { font-size: 14.5px; } }
+@media (max-width: 1320px) { html { font-size: 13px; } }
+@media (min-width: 2000px) { html { font-size: 19px; } }
+@media (min-width: 2600px) { html { font-size: 23px; } }
+
+:root {
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+          'Helvetica Neue', Helvetica, Arial, sans-serif;
+
+  --ink:        rgba(255,255,255,0.94);
+  --ink-2:      rgba(255,255,255,0.68);
+  --ink-3:      rgba(255,255,255,0.47);
+  --ink-4:      rgba(255,255,255,0.30);
+  --rule:       rgba(255,255,255,0.115);
+  --rule-soft:  rgba(255,255,255,0.06);
+
+  --numeral:    rgba(255,255,255,0.11);
+
+  /* safe insets: menu bar above, dock below */
+  --inset-top:    3.4rem;
+  --inset-bottom: 6.2rem;
+  --inset-x:      3.2rem;
+
+  --gutter: 1.15rem;         /* space between a hairline and its text */
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: #050506;
+}
+
+body {
+  font-family: var(--font);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1, 'cv08' 1;
+  cursor: default;                       /* native apps don't switch cursors */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+::selection { background: rgba(255,255,255,0.16); }
+
