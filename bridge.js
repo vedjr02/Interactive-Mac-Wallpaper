@@ -102,3 +102,38 @@ async function saveTasks() {
   })();
   return writing;
 }
+
+/* ==================================================================
+   weather — Open-Meteo, no key needed
+   ================================================================== */
+let weatherCache = { at: 0, data: null };
+
+async function getWeather() {
+  if (Date.now() - weatherCache.at < 15 * 60 * 1000) return weatherCache.data;
+  if (config.latitude == null) return null;
+
+  const url = 'https://api.open-meteo.com/v1/forecast'
+    + `?latitude=${config.latitude}&longitude=${config.longitude}`
+    + '&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m'
+    + '&daily=temperature_2m_max,temperature_2m_min'
+    + '&timezone=auto&forecast_days=1';
+
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const j = await r.json();
+    weatherCache = {
+      at: Date.now(),
+      data: {
+        temp: j.current.temperature_2m,
+        feels: j.current.apparent_temperature,
+        code: j.current.weather_code,
+        wind: j.current.wind_speed_10m,
+        max: j.daily.temperature_2m_max[0],
+        min: j.daily.temperature_2m_min[0],
+      },
+    };
+  } catch (e) {
+    log('weather failed:', e.message);
+  }
+  return weatherCache.data;
+}
