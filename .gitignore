@@ -1,6 +1,7 @@
 # written by the bridge on first run
 config.json
 tasks.json
+events.json
 
 # logs
 *.log
