@@ -10,6 +10,7 @@ const state = {
   events: [],
   weather: null,
   place: null,
+  doneEvents: {},
   editing: false,
   stamp: '',          // yyyy-mm-dd, to detect a date rollover
 };
@@ -255,6 +256,7 @@ function renderMiniCal(now) {
    data layer — bridge, with a local fallback
 ------------------------------------------------------------------- */
 const LS = 'wallpape.tasks';
+const LS_EV = 'wallpape.doneEvents';
 
 async function api(path, opts) {
   const r = await fetch(path, Object.assign({ cache: 'no-store' }, opts));
@@ -268,6 +270,12 @@ function localTasks() {
 function saveLocal() {
   try { localStorage.setItem(LS, JSON.stringify(state.tasks)); } catch {}
 }
+function localDoneEvents() {
+  try { return JSON.parse(localStorage.getItem(LS_EV)) || {}; } catch { return {}; }
+}
+function saveLocalEvents() {
+  try { localStorage.setItem(LS_EV, JSON.stringify(state.doneEvents)); } catch {}
+}
 
 async function pull() {
   try {
@@ -279,11 +287,13 @@ async function pull() {
     }));
     state.weather = d.weather || null;
     state.place = d.place || null;
+    state.doneEvents = d.doneEvents || {};
   } catch {
     state.online = false;
     state.tasks = localTasks();
     state.events = [];
     state.weather = null;
+    state.doneEvents = localDoneEvents();
   }
 }
 
@@ -360,9 +370,14 @@ function renderTasks() {
   const open = list.filter((t) => !t.done).length;
   $('taskCount').textContent = open ? String(open) : '';
 
+  /* anything still open that you started before today has rolled over */
+  const todayKey = key(new Date());
+  const carried = (t) => !!t.createdAt && key(new Date(t.createdAt)) < todayKey;
+
   const groups = [
     ['In progress', list.filter((t) => t.status === 'progress')],
-    ['Not started', list.filter((t) => t.status !== 'progress')],
+    ['Not started', list.filter((t) => t.status !== 'progress' && !carried(t))],
+    ['Pending',     list.filter((t) => t.status !== 'progress' && carried(t))],
   ];
 
   $('taskBody').innerHTML = groups
@@ -515,17 +530,43 @@ function eventsOn(d) {
     .sort((a, b) => (a.allDay === b.allDay ? a.start - b.start : a.allDay ? -1 : 1));
 }
 
-function evRow(e, now) {
+/* title + start, so a tick survives Calendar.app renumbering its events */
+const evKey = (e) => `${e.title}|${e.start.toISOString()}`;
+
+function evRow(e, now, checkable) {
   const past = !e.allDay && e.end < now;
   const live = !e.allDay && e.start <= now && e.end > now;
+  const k = evKey(e);
+  const done = checkable && !!state.doneEvents[k];
   return `
-    <div class="ev${past ? ' past' : ''}${live ? ' now' : ''}">
+    <div class="ev${past ? ' past' : ''}${live ? ' now' : ''}${done ? ' done' : ''}${checkable ? ' checkable' : ''}"
+         ${checkable ? `data-ev="${esc(k)}"` : ''}>
+      ${checkable ? '<div class="box" data-act="evtoggle"></div>' : ''}
       <div class="evtime">${e.allDay ? 'all day' : fmtTime(e.start)}</div>
       <div>
         <div class="evtitle">${esc(e.title)}</div>
         ${e.location ? `<div class="evsub">${esc(e.location)}</div>` : ''}
       </div>
     </div>`;
+}
+
+/* today's and tomorrow's rows can be ticked off; the rest of the week is
+   a glance, not a checklist */
+for (const id of ['todayBody', 'tomorrowBody']) {
+  $(id).addEventListener('click', (ev) => {
+    if (ev.target.dataset.act !== 'evtoggle') return;
+    const row = ev.target.closest('.ev.checkable');
+    if (!row) return;
+
+    const k = row.dataset.ev;
+    const done = !state.doneEvents[k];
+    if (done) state.doneEvents[k] = key(new Date());
+    else delete state.doneEvents[k];
+
+    row.classList.toggle('done', done);
+    mutate('POST', '/api/events/done', { key: k, done });
+    saveLocalEvents();
+  });
 }
 
 function renderAgenda(now) {
@@ -535,7 +576,7 @@ function renderAgenda(now) {
   let placed = false;
   for (const e of today) {
     if (!placed && !e.allDay && e.start > now) { html += '<div class="nowline"></div>'; placed = true; }
-    html += evRow(e, now);
+    html += evRow(e, now, true);
   }
   if (!placed && today.length) html += '<div class="nowline"></div>';
   $('todayBody').innerHTML = html || '<div class="empty">Nothing scheduled</div>';
@@ -545,7 +586,7 @@ function renderAgenda(now) {
   const tm = addDays(now, 1);
   const tmEvents = eventsOn(tm);
   $('tomorrowBody').innerHTML =
-    tmEvents.slice(0, 6).map((e) => evRow(e, now)).join('') || '<div class="empty">Clear</div>';
+    tmEvents.slice(0, 6).map((e) => evRow(e, now, true)).join('') || '<div class="empty">Clear</div>';
   $('tomorrowDate').textContent = fmtDayLabel(tm);
 
   /* the rest of the week — a glance, not a second agenda */

@@ -23,6 +23,7 @@ const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 7373);
 const CONFIG_PATH = path.join(ROOT, 'config.json');
 const TASKS_PATH = path.join(ROOT, 'tasks.json');
+const EVENTS_PATH = path.join(ROOT, 'events.json');
 
 const WINDOW_BACK = 1;    /* days of calendar to keep behind us */
 const WINDOW_FWD = 9;     /* and ahead */
@@ -101,6 +102,39 @@ async function saveTasks() {
     writing = null;
   })();
   return writing;
+}
+
+/* ==================================================================
+   ticked-off calendar events
+
+   Calendar.app is read-only to us, so "done" lives here instead, keyed
+   by title + start so it survives a re-sweep renumbering the events.
+   ================================================================== */
+let doneEvents = {};
+
+function pruneDoneEvents() {
+  const cutoff = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
+  for (const k of Object.keys(doneEvents)) {
+    if (!doneEvents[k] || doneEvents[k] < cutoff) delete doneEvents[k];
+  }
+}
+
+async function loadDoneEvents() {
+  try { doneEvents = JSON.parse(await fsp.readFile(EVENTS_PATH, 'utf8')); } catch { doneEvents = {}; }
+  if (!doneEvents || typeof doneEvents !== 'object' || Array.isArray(doneEvents)) doneEvents = {};
+  pruneDoneEvents();
+}
+
+let writingEvents = null;
+async function saveDoneEvents() {
+  if (writingEvents) return writingEvents;
+  writingEvents = (async () => {
+    const tmp = EVENTS_PATH + '.tmp';
+    await fsp.writeFile(tmp, JSON.stringify(doneEvents, null, 2));
+    await fsp.rename(tmp, EVENTS_PATH);
+    writingEvents = null;
+  })();
+  return writingEvents;
 }
 
 /* ==================================================================
@@ -643,8 +677,21 @@ const server = http.createServer(async (req, res) => {
       weather: await getWeather(),
       events: getEvents(),
       tasks,
+      doneEvents,
       place: config.place,
     });
+  }
+
+  if (p === '/api/events/done' && req.method === 'POST') {
+    try {
+      const b = await readBody(req);
+      if (!b.key) return json(res, 400, { error: 'key required' });
+      if (b.done) doneEvents[String(b.key).slice(0, 400)] = new Date().toISOString().slice(0, 10);
+      else delete doneEvents[b.key];
+      pruneDoneEvents();
+      await saveDoneEvents();
+      return json(res, 200, { ok: true });
+    } catch (e) { return json(res, 400, { error: e.message }); }
   }
 
   if (p === '/api/tasks' && req.method === 'POST') {
@@ -691,7 +738,7 @@ const server = http.createServer(async (req, res) => {
   /* --- static ---------------------------------------------------- */
   const rel = p === '/' ? 'index.html' : p.replace(/^\/+/, '');
   const file = path.join(ROOT, rel);
-  if (!file.startsWith(ROOT) || rel === 'tasks.json' || rel === 'config.json') {
+  if (!file.startsWith(ROOT) || ['tasks.json', 'config.json', 'events.json'].includes(rel)) {
     res.writeHead(403).end('forbidden');
     return;
   }
@@ -710,6 +757,7 @@ const server = http.createServer(async (req, res) => {
 (async function start() {
   await loadConfig();
   await loadTasks();
+  await loadDoneEvents();
   server.listen(PORT, '127.0.0.1', () => {
     log(`wallpape → http://localhost:${PORT}`);
     log(`${tasks.length} task${tasks.length === 1 ? '' : 's'} loaded`);

@@ -372,6 +372,19 @@ body {
 .ev.past { opacity: 0.24; }
 .ev.past:hover { opacity: 0.7; }
 
+/* today and tomorrow can be ticked off */
+.ev.checkable { grid-template-columns: 0.95rem 2.75rem minmax(0,1fr); }
+.ev .box { margin-top: 0.24rem; }
+.ev:hover .box { border-color: var(--ink-2); }
+.ev.done .box { background: var(--ink-4); border-color: transparent; }
+.ev.done .evtitle {
+  color: var(--ink-3);
+  text-decoration: line-through;
+  text-decoration-color: var(--ink-4);
+}
+.ev.done { opacity: 0.28; }
+.ev.done:hover { opacity: 0.7; }
+
 .evtime {
   font-size: 0.635rem;
   font-weight: 500;
@@ -610,6 +623,7 @@ body.layout-rows .clip.masked {
   -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 1.1rem), transparent 100%);
           mask-image: linear-gradient(180deg, #000 calc(100% - 1.1rem), transparent 100%);
 }
+/* the task sections sit side by side, so Pending lands to the right */
 body.layout-rows .tasksection {
   display: flex;
   flex-wrap: wrap;
@@ -617,14 +631,31 @@ body.layout-rows .tasksection {
   align-content: flex-start;
   gap: 0.15rem 1.8rem;
   margin-bottom: 0;
-  flex: 1 1 100%;
+  flex: 1 1 0;
+  min-width: 0;
+  padding-right: 1.4rem;
 }
-body.layout-rows .sectionlabel { margin-bottom: 0; flex: 1 1 100%; }
+body.layout-rows .sectionlabel { margin-bottom: 0.35rem; flex: 1 1 100%; }
+body.layout-rows .tasksection .task { width: 100%; }
 body.layout-rows .task,
 body.layout-rows .ev { width: 14.5rem; max-width: 100%; border-top: 0; }
 body.layout-rows .daylabel { margin: 0; flex: 1 1 100%; }
 body.layout-rows .nowline { display: none; }
-body.layout-rows .addrow { display: none; }   /* the add row lives in column view */
+
+/* the add row becomes the last column of the task band, held clear of the
+   view controls that sit fixed in the same corner */
+body.layout-rows .addrow {
+  display: flex;
+  flex: 0 0 8rem;
+  align-self: flex-start;
+  height: 1.7rem;
+  margin-top: 0;
+  margin-right: 3.6rem;
+  padding-top: 0;
+  border-top: 0;
+}
+body.layout-rows .addrow:hover,
+body.layout-rows .addrow.open { border-top-color: transparent; }
 
 /* --- the foot band ------------------------------------------------ */
 body.layout-rows #grid > .rail-left {
