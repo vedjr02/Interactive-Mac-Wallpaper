@@ -596,19 +596,71 @@ async function refreshFeeds() {
   log(`feeds: ${calCache.events.length} events`);
 }
 
+/* Is Calendar.app already open? Checked with pgrep rather than an Apple
+   Event, because asking the app anything is what launches it. */
+function calendarIsRunning() {
+  return new Promise((resolve) => {
+    execFile('/usr/bin/pgrep', ['-x', 'Calendar'], (err) => resolve(!err));
+  });
+}
+
+/* The EventKit helper reads the same store without involving the app at all,
+   and returns in milliseconds. It needs Calendar access granted to it, so we
+   probe once and remember the answer. */
+const CALDUMP = path.join(ROOT, 'caldump');
+let caldumpOk = null;        /* null = untried, true/false = last outcome */
+let caldumpLogged = false;   /* only complain about it once */
+
+function runCaldump() {
+  return new Promise((resolve, reject) => {
+    execFile(CALDUMP, [String(WINDOW_BACK), String(WINDOW_FWD)], { timeout: 20000, maxBuffer: 8 << 20 },
+      (err, stdout, stderr) => (err ? reject(new Error((stderr || err.message).trim())) : resolve(stdout)));
+  });
+}
+
 async function refreshCalendarApp() {
   if (appBusy) return;
   appBusy = true;
   const t0 = Date.now();
+  const secs = () => ((Date.now() - t0) / 1000).toFixed(1);
+
   try {
+    /* 1. EventKit, if it has been granted access. Retried every sweep — it
+          costs a fraction of a second — so the moment you grant access it
+          starts being used, with no restart. */
+    if (fs.existsSync(CALDUMP)) {
+      try {
+        const rows = JSON.parse((await runCaldump()).trim() || '[]');
+        if (caldumpOk !== true) log('using EventKit — Calendar.app is never launched');
+        caldumpOk = true;
+        caldumpLogged = false;
+        commit(rows, 'eventkit');
+        log(`EventKit: ${calCache.events.length} events in ${secs()}s`);
+        return;
+      } catch (e) {
+        caldumpOk = false;
+        if (!caldumpLogged) {
+          caldumpLogged = true;
+          log('EventKit unavailable (' + e.message.split('\n')[0].slice(0, 60) + ')');
+          log('  → run  ./caldump  once from Terminal and allow Calendar access,');
+          log('    or set icsUrls in config.json. Until then Calendar.app is left closed.');
+        }
+      }
+    }
+
+    /* 2. Scripting, but only while the app is already open — never launch it */
+    if (!(await calendarIsRunning())) {
+      log('Calendar.app is closed; leaving it that way and keeping the cached events');
+      return;
+    }
+
     const [from, to] = windowBounds();
     const raw = JSON.parse((await runOsascript(calendarScript(config.calendars))).trim() || '[]');
     const repeats = raw.filter((e) => e.rrule).length;
     commit(expandAppEvents(raw, from, to), 'calendar.app');
-    log(`Calendar.app: ${calCache.events.length} events in ${((Date.now() - t0) / 1000).toFixed(0)}s`
-      + ` (from ${repeats} repeating)`);
+    log(`Calendar.app: ${calCache.events.length} events in ${secs()}s (from ${repeats} repeating)`);
   } catch (e) {
-    log('Calendar.app unavailable:', e.message.split('\n')[0].slice(0, 120));
+    log('calendar refresh failed:', e.message.split('\n')[0].slice(0, 120));
   } finally {
     appBusy = false;
   }

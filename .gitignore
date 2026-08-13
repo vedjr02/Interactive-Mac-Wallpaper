@@ -10,3 +10,4 @@ events.json
 .claude/
 .DS_Store
 node_modules/
+caldump
