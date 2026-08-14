@@ -24,6 +24,7 @@ const PORT = Number(process.env.PORT || 7373);
 const CONFIG_PATH = path.join(ROOT, 'config.json');
 const TASKS_PATH = path.join(ROOT, 'tasks.json');
 const EVENTS_PATH = path.join(ROOT, 'events.json');
+const CACHE_PATH = path.join(ROOT, 'cache.json');
 
 const WINDOW_BACK = 1;    /* days of calendar to keep behind us */
 const WINDOW_FWD = 9;     /* and ahead */
@@ -41,13 +42,26 @@ const DEFAULT_CONFIG = {
   icsUrls: [],
   useCalendarApp: true,
   calendars: [],
+  /* Scripting Calendar.app LAUNCHES it. Left false, the bridge only reads
+     from it when you already have it open. Set true if you would rather have
+     fresh events than a closed Calendar.app. */
+  launchCalendarApp: false,
 };
 
 let config = { ...DEFAULT_CONFIG };
 
 async function loadConfig() {
   try {
-    config = { ...DEFAULT_CONFIG, ...JSON.parse(await fsp.readFile(CONFIG_PATH, 'utf8')) };
+    const onDisk = JSON.parse(await fsp.readFile(CONFIG_PATH, 'utf8'));
+    config = { ...DEFAULT_CONFIG, ...onDisk };
+    /* backfill any option added since this config was written, so every
+       setting is visible in the file rather than only in the defaults */
+    const missing = Object.keys(DEFAULT_CONFIG).filter((k) => !(k in onDisk));
+    if (missing.length) {
+      config._comment = DEFAULT_CONFIG._comment;
+      await fsp.writeFile(CONFIG_PATH, JSON.stringify(config, null, 2));
+      log(`added new settings to config.json: ${missing.join(', ')}`);
+    }
   } catch {
     await fsp.writeFile(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2));
     log('wrote a starter config.json');
@@ -578,6 +592,31 @@ function commit(events, source) {
       })
       .sort((a, b) => new Date(a.start) - new Date(b.start)),
   };
+  saveCache();
+}
+
+/* Keep the last good sweep on disk. A restart should never leave the
+   wallpaper blank just because the next refresh has not landed yet. */
+function saveCache() {
+  fsp.writeFile(CACHE_PATH + '.tmp', JSON.stringify(calCache))
+    .then(() => fsp.rename(CACHE_PATH + '.tmp', CACHE_PATH))
+    .catch(() => {});
+}
+
+async function loadCache() {
+  try {
+    const c = JSON.parse(await fsp.readFile(CACHE_PATH, 'utf8'));
+    if (Array.isArray(c.events)) {
+      /* only worth restoring while it still overlaps the window we show */
+      const [from, to] = windowBounds();
+      const kept = c.events.filter((e) => {
+        const s = new Date(e.start);
+        return s >= from && s <= to;
+      });
+      calCache = { at: 0, source: c.source || 'cache', events: kept };
+      if (kept.length) log(`restored ${kept.length} cached events from the last sweep`);
+    }
+  } catch { /* no cache yet */ }
 }
 
 async function refreshFeeds() {
@@ -648,8 +687,9 @@ async function refreshCalendarApp() {
       }
     }
 
-    /* 2. Scripting, but only while the app is already open — never launch it */
-    if (!(await calendarIsRunning())) {
+    /* 2. Scripting. Only while the app is already open, unless you have
+          explicitly asked for it to be launched. */
+    if (!config.launchCalendarApp && !(await calendarIsRunning())) {
       log('Calendar.app is closed; leaving it that way and keeping the cached events');
       return;
     }
@@ -790,7 +830,8 @@ const server = http.createServer(async (req, res) => {
   /* --- static ---------------------------------------------------- */
   const rel = p === '/' ? 'index.html' : p.replace(/^\/+/, '');
   const file = path.join(ROOT, rel);
-  if (!file.startsWith(ROOT) || ['tasks.json', 'config.json', 'events.json'].includes(rel)) {
+  if (!file.startsWith(ROOT)
+      || ['tasks.json', 'config.json', 'events.json', 'cache.json'].includes(rel)) {
     res.writeHead(403).end('forbidden');
     return;
   }
@@ -810,6 +851,7 @@ const server = http.createServer(async (req, res) => {
   await loadConfig();
   await loadTasks();
   await loadDoneEvents();
+  await loadCache();
   server.listen(PORT, '127.0.0.1', () => {
     log(`wallpape → http://localhost:${PORT}`);
     log(`${tasks.length} task${tasks.length === 1 ? '' : 's'} loaded`);

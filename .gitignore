@@ -11,3 +11,4 @@ events.json
 .DS_Store
 node_modules/
 caldump
+cache.json
