@@ -42,10 +42,10 @@ const DEFAULT_CONFIG = {
   icsUrls: [],
   useCalendarApp: true,
   calendars: [],
-  /* Scripting Calendar.app LAUNCHES it. Left false, the bridge only reads
-     from it when you already have it open. Set true if you would rather have
-     fresh events than a closed Calendar.app. */
-  launchCalendarApp: false,
+  /* Scripting Calendar.app requires it to be running. When it isn't, the
+     bridge starts it hidden in the background, reads the events, and quits it
+     again — so it never appears or lingers. Set true to leave it open. */
+  keepCalendarAppOpen: false,
 };
 
 let config = { ...DEFAULT_CONFIG };
@@ -643,6 +643,32 @@ function calendarIsRunning() {
   });
 }
 
+/* `-g -j` starts it in the background and hidden: no window, no Dock bounce,
+   and the front app keeps its focus. */
+function openCalendarHidden() {
+  return new Promise((resolve) => {
+    execFile('/usr/bin/open', ['-g', '-j', '-a', 'Calendar'], () => setTimeout(resolve, 2500));
+  });
+}
+
+/* Before closing it again, make sure it isn't the app you're looking at. */
+function frontmostIsCalendar() {
+  return new Promise((resolve) => {
+    execFile('/usr/bin/lsappinfo', ['front'], (e1, asn) => {
+      if (e1 || !asn.trim()) return resolve(false);
+      execFile('/usr/bin/lsappinfo', ['info', '-only', 'name', asn.trim()], (e2, out) => {
+        resolve(!e2 && /"Calendar"/.test(out));
+      });
+    });
+  });
+}
+
+function quitCalendar() {
+  return new Promise((resolve) => {
+    execFile('osascript', ['-e', 'tell application "Calendar" to quit'], { timeout: 15000 }, () => resolve());
+  });
+}
+
 /* The EventKit helper reads the same store without involving the app at all,
    and returns in milliseconds. It needs Calendar access granted to it, so we
    probe once and remember the answer. */
@@ -662,6 +688,7 @@ async function refreshCalendarApp() {
   appBusy = true;
   const t0 = Date.now();
   const secs = () => ((Date.now() - t0) / 1000).toFixed(1);
+  let launchedByUs = false;
 
   try {
     /* 1. EventKit, if it has been granted access. Retried every sweep — it
@@ -681,17 +708,18 @@ async function refreshCalendarApp() {
         if (!caldumpLogged) {
           caldumpLogged = true;
           log('EventKit unavailable (' + e.message.split('\n')[0].slice(0, 60) + ')');
-          log('  → run  ./caldump  once from Terminal and allow Calendar access,');
-          log('    or set icsUrls in config.json. Until then Calendar.app is left closed.');
+          log('  → falling back to a hidden Calendar.app sweep. To skip that,');
+          log('    run  ./caldump  once from Terminal and allow Calendar access,');
+          log('    or put your feed URLs in icsUrls in config.json.');
         }
       }
     }
 
-    /* 2. Scripting. Only while the app is already open, unless you have
-          explicitly asked for it to be launched. */
-    if (!config.launchCalendarApp && !(await calendarIsRunning())) {
-      log('Calendar.app is closed; leaving it that way and keeping the cached events');
-      return;
+    /* 2. Scripting. If the app is closed, start it hidden and close it again
+          afterwards, so you never see it. */
+    if (!(await calendarIsRunning())) {
+      await openCalendarHidden();
+      launchedByUs = true;
     }
 
     const [from, to] = windowBounds();
@@ -702,6 +730,11 @@ async function refreshCalendarApp() {
   } catch (e) {
     log('calendar refresh failed:', e.message.split('\n')[0].slice(0, 120));
   } finally {
+    /* put it back the way we found it, unless you have since brought it up */
+    if (launchedByUs && !config.keepCalendarAppOpen) {
+      if (await frontmostIsCalendar()) log('Calendar.app is in use; leaving it open');
+      else { await quitCalendar(); log('Calendar.app closed again'); }
+    }
     appBusy = false;
   }
 }
